@@ -1,93 +1,120 @@
 import streamlit as st
 import datetime
-import csv
-import io
 
-def calculate_baseboard_price(linear_feet, prep_key):
-    base_rates = {
-        'light': 1.00,
-        'medium': 1.50,
-        'heavy': 2.00
-    }
+st.set_page_config(page_title="Painting Estimate Tool", layout="wide")
 
-    if prep_key not in base_rates:
-        raise ValueError("Invalid prep level.")
-
-    base_price = linear_feet * base_rates[prep_key]
-
-    # Automatically add caulking for heavy prep only
-    caulk_price = 0.25 * linear_feet if prep_key == "heavy" else 0
-
-    subtotal = base_price + caulk_price
-    materials_fee = subtotal * 0.12
-    total_price = subtotal + materials_fee
-
-    return {
-        'Base Price': round(base_price, 2),
-        'Caulking (included with Heavy Prep)': round(caulk_price, 2),
-        'Materials Fee (12%)': round(materials_fee, 2),
-        'Total Price': round(total_price, 2)
-    }
-
-# Prep level descriptions
-prep_options = {
-    "Light – 1 coat of paint": "light",
-    "Medium – 2 coats of paint": "medium",
-    "Heavy – Prime + 2 coats, fill holes, sand, caulk": "heavy"
+# Pricing
+BASEBOARD_RATES = {
+    'light': 1.00,
+    'medium': 1.50,
+    'heavy': 2.00
 }
 
-# UI
-st.set_page_config(page_title="Baseboard Pricing Calculator", layout="centered")
-st.markdown("""
-# Couleurs Vraies Peinture
-**Baseboard Painting Estimate Tool**
-""")
+SQUAREFOOT_RATE = 1.50
+DOOR_COST = 50
+FRAME_COST = 50
 
-client_name = st.text_input("Client Name")
-project_name = st.text_input("Project Name / Address")
-estimate_date = st.date_input("Estimate Date", value=datetime.date.today())
+PREP_DESCRIPTIONS = {
+    "Light – 2 coats, no patching": "light",
+    "Medium – Patch walls + 2 coats": "medium",
+    "Heavy – Patch, prime + 2 coats": "heavy"
+}
 
-linear_feet = st.number_input("Total Linear Feet of Baseboard:", min_value=1, value=100)
+# Sidebar – Client Info
+st.sidebar.title("🧾 Client Information")
+client_name = st.sidebar.text_input("Client Name")
+project_name = st.sidebar.text_input("Project Name / Address")
+estimate_date = st.sidebar.date_input("Estimate Date", value=datetime.date.today())
 
-prep_description = st.selectbox("Prep Level:", list(prep_options.keys()))
-prep_key = prep_options[prep_description]
+# Header
+st.markdown("<h1 style='color:#3366cc;'>Couleurs Vraies Peinture</h1>", unsafe_allow_html=True)
+st.markdown("**Professional Painting Estimate Tool**")
+st.markdown("---")
 
-if st.button("Calculate Total Price"):
-    result = calculate_baseboard_price(linear_feet, prep_key)
+col1, col2 = st.columns(2)
 
-    st.subheader("💵 Price Breakdown")
-    for item, cost in result.items():
-        st.write(f"**{item}:** ${cost}")
+# Baseboard Estimate
+with col1:
+    st.subheader("📏 Baseboard Estimate")
+    linear_feet = st.number_input("Linear Feet of Baseboard", min_value=1, value=100)
+    prep_label_baseboard = st.selectbox("Prep Level", list(PREP_DESCRIPTIONS.keys()), key="prep_baseboard")
+    prep_key_baseboard = PREP_DESCRIPTIONS[prep_label_baseboard]
 
-    # Text output
-    text_output = f"""
+    if st.button("Calculate Baseboard Estimate"):
+        base_price = linear_feet * BASEBOARD_RATES[prep_key_baseboard]
+        materials_fee = base_price * 0.12
+        total = base_price + materials_fee
+
+        st.markdown("#### 💵 Breakdown")
+        st.write(f"**Base Price:** ${base_price:.2f}")
+        st.write(f"**Materials Fee (12%):** ${materials_fee:.2f}")
+        st.write(f"**Total Estimate:** ${total:.2f}")
+
+        quote = f"""
 Couleurs Vraies Peinture
 
 Client: {client_name}
 Project: {project_name}
 Date: {estimate_date.strftime('%Y-%m-%d')}
 
-Total Linear Feet: {linear_feet}
-Prep Level: {prep_description}
+--- Baseboard Estimate ---
+Linear Feet: {linear_feet}
+Prep Level: {prep_label_baseboard}
+Base Price: ${base_price:.2f}
+Materials Fee (12%): ${materials_fee:.2f}
+Total Price: ${total:.2f}
 
---- Estimate ---
+Merci pour votre confiance! / Thank you for your trust!
 """
-    for item, cost in result.items():
-        text_output += f"{item}: ${cost}\n"
+        st.download_button("📄 Download Baseboard Quote", quote, file_name="baseboard_quote.txt")
 
-    text_output += "\nMerci pour votre confiance! / Thank you for your trust!"
+# House Estimate
+with col2:
+    st.subheader("🏠 House Estimate")
+    walls = st.number_input("Walls (sqft)", min_value=0)
+    ceilings = st.number_input("Ceilings (sqft)", min_value=0)
+    doors = st.number_input("Number of Doors", min_value=0, step=1)
+    frames = st.number_input("Number of Frames", min_value=0, step=1)
+    prep_label_house = st.selectbox("Prep Level", list(PREP_DESCRIPTIONS.keys()), key="prep_house")
+    prep_key_house = PREP_DESCRIPTIONS[prep_label_house]
 
-    st.download_button("📄 Download Quote (Text)", text_output, file_name="baseboard_quote.txt")
+    if st.button("Calculate House Estimate"):
+        surface_total = (walls + ceilings) * SQUAREFOOT_RATE
+        door_total = doors * DOOR_COST
+        frame_total = frames * FRAME_COST
+        subtotal = surface_total + door_total + frame_total
+        materials_fee = subtotal * 0.12
+        total = subtotal + materials_fee
 
-    # CSV output
-    csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-    writer.writerow(["Client", "Project", "Date", "Linear Feet", "Prep Level"])
-    writer.writerow([client_name, project_name, estimate_date, linear_feet, prep_description])
-    writer.writerow([])
-    writer.writerow(["Item", "Cost ($)"])
-    for item, cost in result.items():
-        writer.writerow([item, cost])
+        st.markdown("#### 💵 Breakdown")
+        st.write(f"**Walls & Ceilings:** ${surface_total:.2f}")
+        st.write(f"**Doors:** ${door_total:.2f}")
+        st.write(f"**Frames:** ${frame_total:.2f}")
+        st.write(f"**Materials Fee (12%):** ${materials_fee:.2f}")
+        st.write(f"**Total Estimate:** ${total:.2f}")
 
-    st.download_button("📊 Download Quote (CSV)", csv_buffer.getvalue(), file_name="baseboard_quote.csv", mime="text/csv")
+        house_quote = f"""
+Couleurs Vraies Peinture
+
+Client: {client_name}
+Project: {project_name}
+Date: {estimate_date.strftime('%Y-%m-%d')}
+
+--- House Painting Estimate ---
+Walls SqFt: {walls}
+Ceilings SqFt: {ceilings}
+Doors: {doors}
+Frames: {frames}
+Prep Level: {prep_label_house}
+
+Walls/Ceilings Total: ${surface_total:.2f}
+Doors: ${door_total:.2f}
+Frames: ${frame_total:.2f}
+Materials Fee (12%): ${materials_fee:.2f}
+Total Price: ${total:.2f}
+
+Merci pour votre confiance! / Thank you for your trust!
+"""
+        st.download_button("📄 Download House Quote", house_quote, file_name="house_quote.txt")
+
 
