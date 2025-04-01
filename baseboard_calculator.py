@@ -3,7 +3,7 @@ import datetime
 import csv
 import io
 
-def calculate_baseboard_price(linear_feet, prep_key, add_caulk=False, add_sanding=False, add_quarter_round=False):
+def calculate_baseboard_price(linear_feet, prep_key):
     base_rates = {
         'light': 1.00,
         'medium': 1.50,
@@ -14,31 +14,29 @@ def calculate_baseboard_price(linear_feet, prep_key, add_caulk=False, add_sandin
         raise ValueError("Invalid prep level.")
 
     base_price = linear_feet * base_rates[prep_key]
-    caulk_price = 0.25 * linear_feet if add_caulk else 0
-    sanding_price = 0.50 * linear_feet if add_sanding else 0
-    quarter_round_price = 0.75 * linear_feet if add_quarter_round else 0
 
-    subtotal = base_price + caulk_price + sanding_price + quarter_round_price
+    # Automatically add caulking for heavy prep only
+    caulk_price = 0.25 * linear_feet if prep_key == "heavy" else 0
+
+    subtotal = base_price + caulk_price
     materials_fee = subtotal * 0.12
     total_price = subtotal + materials_fee
 
     return {
         'Base Price': round(base_price, 2),
-        'Caulking Add-on': round(caulk_price, 2),
-        'Sanding Add-on': round(sanding_price, 2),
-        'Quarter Round Add-on': round(quarter_round_price, 2),
+        'Caulking (included with Heavy Prep)': round(caulk_price, 2),
         'Materials Fee (12%)': round(materials_fee, 2),
         'Total Price': round(total_price, 2)
     }
 
-# Mapping full descriptions to internal keys
+# Prep level descriptions
 prep_options = {
     "Light – 1 coat of paint": "light",
     "Medium – 2 coats of paint": "medium",
-    "Heavy – Prime + 2 coats, fill holes & sand": "heavy"
+    "Heavy – Prime + 2 coats, fill holes, sand, caulk": "heavy"
 }
 
-# Streamlit UI
+# UI
 st.set_page_config(page_title="Baseboard Pricing Calculator", layout="centered")
 st.markdown("""
 # Couleurs Vraies Peinture
@@ -54,24 +52,14 @@ linear_feet = st.number_input("Total Linear Feet of Baseboard:", min_value=1, va
 prep_description = st.selectbox("Prep Level:", list(prep_options.keys()))
 prep_key = prep_options[prep_description]
 
-add_caulk = st.checkbox("Add Caulking")
-add_sanding = st.checkbox("Add Sanding")
-add_quarter_round = st.checkbox("Add Quarter Round Painting")
-
 if st.button("Calculate Total Price"):
-    result = calculate_baseboard_price(
-        linear_feet,
-        prep_key,
-        add_caulk,
-        add_sanding,
-        add_quarter_round
-    )
+    result = calculate_baseboard_price(linear_feet, prep_key)
 
     st.subheader("💵 Price Breakdown")
     for item, cost in result.items():
         st.write(f"**{item}:** ${cost}")
 
-    # Format plain text quote
+    # Text output
     text_output = f"""
 Couleurs Vraies Peinture
 
@@ -91,7 +79,7 @@ Prep Level: {prep_description}
 
     st.download_button("📄 Download Quote (Text)", text_output, file_name="baseboard_quote.txt")
 
-    # Create CSV buffer
+    # CSV output
     csv_buffer = io.StringIO()
     writer = csv.writer(csv_buffer)
     writer.writerow(["Client", "Project", "Date", "Linear Feet", "Prep Level"])
@@ -102,3 +90,4 @@ Prep Level: {prep_description}
         writer.writerow([item, cost])
 
     st.download_button("📊 Download Quote (CSV)", csv_buffer.getvalue(), file_name="baseboard_quote.csv", mime="text/csv")
+
